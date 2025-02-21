@@ -32,8 +32,8 @@ class SkipGramNeg(nn.Module):
 
         # Define embedding layers for input and output words
         # TODO
-        self.in_embed: nn.Embedding = None
-        self.out_embed: nn.Embedding = None
+        self.in_embed: nn.Embedding = nn.Embedding(n_vocab,n_embed)
+        self.out_embed: nn.Embedding = nn.Embedding(n_vocab,n_embed)
 
         # Initialize embedding tables with uniform distribution
         self.in_embed.weight.data.uniform_(-1, 1)
@@ -49,21 +49,24 @@ class SkipGramNeg(nn.Module):
             A tensor containing the input vectors for the given words.
         """
         # TODO
-        input_vectors: torch.Tensor = None
+        input_vectors: torch.Tensor = self.in_embed(input_words)
         return input_vectors
-
+    
     def forward_output(self, output_words: torch.Tensor) -> torch.Tensor:
-        """Fetches output vectors for a batch of output words.
-
+        """Computes the Negative Sampling loss.
+ 
         Args:
-            output_words: A tensor of integers representing output words.
-
+            input_vectors: A tensor containing input word vectors,
+                            shape (batch_size, embed_size).
+            output_vectors: A tensor containing output word vectors (positive samples),
+                            shape (batch_size, embed_size).
+            noise_vectors: A tensor containing vectors for negative samples,
+                            shape (batch_size, n_samples, embed_size).
+ 
         Returns:
-            A tensor containing the output vectors for the given words.
+            A tensor containing the average loss for the batch.
         """
-        # TODO
-        output_vectors: torch.Tensor = None
-        return output_vectors
+        return self.out_embed(output_words)
 
     def forward_noise(self, batch_size: int, n_samples: int) -> torch.Tensor:
         """Generates noise vectors for negative sampling.
@@ -82,17 +85,16 @@ class SkipGramNeg(nn.Module):
             noise_dist: torch.Tensor = self.noise_dist
 
         # Sample words from our noise distribution
-        # TODO
-        noise_words: torch.Tensor = None
+        noise_words: torch.Tensor = torch.multinomial(noise_dist, batch_size * n_samples)
 
         device: str = "cuda" if self.out_embed.weight.is_cuda else "cpu"
         noise_words: torch.Tensor = noise_words.to(device)
 
-        # Reshape output vectors to size (batch_size, n_samples, n_embed)
-        # TODO
-        noise_vectors: torch.Tensor = None
-
+        # Reshape noise_vectors to (batch_size, n_samples, n_embed)
+        noise_words = noise_words.view(batch_size, n_samples)
+        noise_vectors = self.out_embed(noise_words)
         return noise_vectors
+
 
     
 class NegativeSamplingLoss(nn.Module):
@@ -112,27 +114,27 @@ class NegativeSamplingLoss(nn.Module):
     def forward(self, input_vectors: torch.Tensor, output_vectors: torch.Tensor,
                 noise_vectors: torch.Tensor) -> torch.Tensor:
         """Computes the Negative Sampling loss.
-
+ 
         Args:
-            input_vectors: A tensor containing input word vectors, 
+            input_vectors: A tensor containing input word vectors,
                             shape (batch_size, embed_size).
-            output_vectors: A tensor containing output word vectors (positive samples), 
+            output_vectors: A tensor containing output word vectors (positive samples),
                             shape (batch_size, embed_size).
-            noise_vectors: A tensor containing vectors for negative samples, 
+            noise_vectors: A tensor containing vectors for negative samples,
                             shape (batch_size, n_samples, embed_size).
-
+ 
         Returns:
             A tensor containing the average loss for the batch.
         """
+        batch_size, embed_size = input_vectors.shape
 
-        # Compute log-sigmoid loss for correct classifications
-        # TODO
-        out_loss = None
+        input_vectors = input_vectors.view(batch_size, embed_size, 1)
+        output_vectors = output_vectors.view(batch_size, 1, embed_size)
+ 
+        out_loss = torch.bmm(output_vectors, input_vectors).sigmoid().log()
+        out_loss = out_loss.squeeze()
 
-        # Compute log-sigmoid loss for incorrect classifications
-        # TODO
-        noise_loss = None
-
-        # Return the negative sum of the correct and noisy log-sigmoid losses, averaged over the batch
-        # TODO
-        return None
+        noise_loss = torch.bmm(noise_vectors.neg(), input_vectors).sigmoid().log()
+        noise_loss = noise_loss.squeeze().sum(1) 
+ 
+        return -(out_loss + noise_loss).mean()

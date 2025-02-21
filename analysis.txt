@@ -1,0 +1,8 @@
+En la imagen, se observa una concentración densa en el centro, lo que indica que muchas palabras están estrechamente relacionadas
+en términos semánticos según el modelo.
+
+Hay palabras dispersas en los bordes, lo que sugiere que estas palabras tienen un significado más específico o menos relacionado 
+con el núcleo del conjunto.
+
+Las palabras próximas entre sí indican una mayor similitud, como podrían ser given y considered, mientras que palabras muy alejadas 
+guardan poca relación, como por ejemplo although y kingdom.
